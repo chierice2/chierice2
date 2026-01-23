@@ -120,7 +120,7 @@ class TouristGuideAPITester:
         if response and response.status_code == 200:
             cities = response.json()
             if cities:
-                self.city_ids = [city["id"] for city in cities]
+                self.city_ids = [city["_id"] for city in cities]
                 self.log(f"✅ GET /cities working - Found {len(cities)} cities")
                 
                 # Test GET /cities/{id}
