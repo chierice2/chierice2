@@ -350,7 +350,7 @@ async def get_places(city_id: Optional[str] = None, category: Optional[str] = No
         query["category"] = category
     
     places = await db.places.find(query).to_list(100)
-    return [Place(_id=str(place["_id"]], **{k: v for k, v in place.items() if k != "_id"}) for place in places]
+    return [Place(_id=str(place["_id"]), **{k: v for k, v in place.items() if k != "_id"}) for place in places]
 
 
 @api_router.get("/places/{place_id}", response_model=Place)
