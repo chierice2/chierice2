@@ -148,7 +148,7 @@ class TouristGuideAPITester:
         if response and response.status_code == 200:
             events = response.json()
             if events:
-                self.event_ids = [event["id"] for event in events]
+                self.event_ids = [event["_id"] for event in events]
                 self.log(f"✅ GET /events working - Found {len(events)} events")
                 
                 # Test GET /events with city_id filter
