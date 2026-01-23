@@ -168,15 +168,18 @@ backend:
   
   - task: "CRUD de Accommodations"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoints implementados: GET /api/accommodations, GET /api/accommodations/{id} com filtro por city_id"
+      - working: true
+        agent: "testing"
+        comment: "✅ Todos os endpoints de acomodações testados e funcionando: GET /api/accommodations (1 acomodação encontrada), GET /api/accommodations?city_id={id} (filtro por cidade funcionando), GET /api/accommodations/{accommodation_id} (busca individual funcionando)"
   
   - task: "CRUD de Itineraries"
     implemented: true
