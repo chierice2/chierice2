@@ -21,7 +21,7 @@ export default function Welcome() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>{t('loading')}</Text>
       </View>
     );
   }
@@ -33,7 +33,7 @@ export default function Welcome() {
           <Ionicons name="airplane" size={80} color={colors.primary} />
           <Text style={styles.title}>Local Guide</Text>
           <Text style={styles.subtitle}>
-            {t('Seu guia para experiências locais', 'Your guide for local experiences')}
+            {t('welcome')}
           </Text>
         </View>
 
@@ -62,7 +62,7 @@ export default function Welcome() {
             onPress={() => router.push('/auth/login')}
           >
             <Text style={styles.primaryButtonText}>
-              {t('Entrar', 'Sign In')}
+              {t('signIn')}
             </Text>
           </TouchableOpacity>
 
@@ -71,7 +71,7 @@ export default function Welcome() {
             onPress={() => router.push('/auth/register')}
           >
             <Text style={styles.secondaryButtonText}>
-              {t('Criar Conta', 'Sign Up')}
+              {t('signUp')}
             </Text>
           </TouchableOpacity>
         </View>
