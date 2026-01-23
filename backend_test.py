@@ -235,7 +235,7 @@ class TouristGuideAPITester:
         if response and response.status_code == 200:
             accommodations = response.json()
             if accommodations:
-                self.accommodation_ids = [acc["id"] for acc in accommodations]
+                self.accommodation_ids = [acc["_id"] for acc in accommodations]
                 self.log(f"✅ GET /accommodations working - Found {len(accommodations)} accommodations")
                 
                 # Test GET /accommodations with city_id filter
