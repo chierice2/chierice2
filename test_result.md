@@ -138,15 +138,18 @@ backend:
   
   - task: "CRUD de Events"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoints implementados: GET /api/events, GET /api/events/{id} com filtro por city_id"
+      - working: true
+        agent: "testing"
+        comment: "✅ Todos os endpoints de eventos testados e funcionando: GET /api/events (2 eventos encontrados), GET /api/events?city_id={id} (filtro por cidade funcionando), GET /api/events/{event_id} (busca individual funcionando)"
   
   - task: "CRUD de Places"
     implemented: true
