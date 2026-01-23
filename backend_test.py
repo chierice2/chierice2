@@ -274,7 +274,7 @@ class TouristGuideAPITester:
         if response and response.status_code == 200:
             itineraries = response.json()
             if itineraries:
-                self.itinerary_ids = [itin["id"] for itin in itineraries]
+                self.itinerary_ids = [itin["_id"] for itin in itineraries]
                 self.log(f"✅ GET /itineraries working - Found {len(itineraries)} itineraries")
                 
                 # Test GET /itineraries with city_id filter
