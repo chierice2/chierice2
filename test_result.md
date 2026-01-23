@@ -153,15 +153,18 @@ backend:
   
   - task: "CRUD de Places"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoints implementados: GET /api/places, GET /api/places/{id} com filtros por city_id e category"
+      - working: true
+        agent: "testing"
+        comment: "✅ Todos os endpoints de lugares testados e funcionando: GET /api/places (3 lugares encontrados), GET /api/places?city_id={id} (filtro por cidade funcionando), GET /api/places?city_id={id}&category=eat (filtro por categoria funcionando - 1 restaurante encontrado), GET /api/places/{place_id} (busca individual funcionando)"
   
   - task: "CRUD de Accommodations"
     implemented: true
