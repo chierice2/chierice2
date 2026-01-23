@@ -187,7 +187,7 @@ class TouristGuideAPITester:
         if response and response.status_code == 200:
             places = response.json()
             if places:
-                self.place_ids = [place["id"] for place in places]
+                self.place_ids = [place["_id"] for place in places]
                 self.log(f"✅ GET /places working - Found {len(places)} places")
                 
                 # Test GET /places with city_id filter
