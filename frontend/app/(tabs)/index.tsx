@@ -54,8 +54,8 @@ export default function Home() {
     } catch (error) {
       console.error('Error loading cities:', error);
       Alert.alert(
-        t('Erro', 'Error'),
-        t('Erro ao carregar cidades', 'Error loading cities')
+        t('error'),
+        t('errorLoadingCities')
       );
     } finally {
       setLoading(false);
