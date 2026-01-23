@@ -150,7 +150,7 @@ export default function Home() {
                   style={[
                     styles.cityDescription,
                     selectedCity?.id === city.id && styles.cityDescriptionSelected,
-                  ]
+                  ]}
                   numberOfLines={2}
                 >
                   {language === 'pt' ? city.description_pt : city.description_en}
