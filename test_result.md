@@ -183,15 +183,18 @@ backend:
   
   - task: "CRUD de Itineraries"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Endpoints implementados: GET /api/itineraries, GET /api/itineraries/{id} com filtros por city_id e type"
+      - working: true
+        agent: "testing"
+        comment: "✅ Todos os endpoints de itinerários testados e funcionando: GET /api/itineraries (3 itinerários encontrados), GET /api/itineraries?city_id={id} (filtro por cidade funcionando), GET /api/itineraries?city_id={id}&type=aventureiro (filtro por tipo funcionando - 1 itinerário aventureiro encontrado), GET /api/itineraries/{itinerary_id} (busca individual funcionando)"
   
   - task: "Sistema de Favoritos"
     implemented: true
