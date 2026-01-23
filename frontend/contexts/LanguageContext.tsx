@@ -26,6 +26,7 @@ const translations = {
     
     // Errors
     error: 'Erro',
+    errorLoadingCities: 'Erro ao carregar cidades',
     fillAllFields: 'Por favor, preencha todos os campos',
     passwordMinLength: 'A senha deve ter pelo menos 6 caracteres',
     loginError: 'Erro ao fazer login',
@@ -102,6 +103,7 @@ const translations = {
     
     // Errors
     error: 'Error',
+    errorLoadingCities: 'Error loading cities',
     fillAllFields: 'Please fill all fields',
     passwordMinLength: 'Password must be at least 6 characters',
     loginError: 'Login error',
