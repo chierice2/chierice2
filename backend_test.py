@@ -331,7 +331,7 @@ class TouristGuideAPITester:
             response = self.make_request("POST", "/favorites", favorite_data, auth_required=True)
             if response and response.status_code == 200:
                 favorite = response.json()
-                self.favorite_ids.append(favorite["id"])
+                self.favorite_ids.append(favorite["_id"])
                 self.log("✅ POST /favorites working - Added event to favorites")
             else:
                 self.log(f"❌ POST /favorites failed: {response.status_code if response else 'No response'}", "ERROR")
@@ -347,7 +347,7 @@ class TouristGuideAPITester:
             response = self.make_request("POST", "/favorites", favorite_data, auth_required=True)
             if response and response.status_code == 200:
                 favorite = response.json()
-                self.favorite_ids.append(favorite["id"])
+                self.favorite_ids.append(favorite["_id"])
                 self.log("✅ POST /favorites working - Added place to favorites")
             else:
                 self.log(f"❌ POST /favorites (place) failed: {response.status_code if response else 'No response'}", "ERROR")
