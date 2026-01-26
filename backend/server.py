@@ -61,6 +61,7 @@ class UserCreate(BaseModel):
     password: str
     name: str
     preferred_language: str = "pt"
+    travel_style: Optional[str] = None  # chill, cultural, party, nature, foodie
 
 
 class UserLogin(BaseModel):
