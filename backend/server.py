@@ -31,7 +31,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 # Create the main app
-app = FastAPI()
+app = FastAPI(title="Premium Local Guide API")
 api_router = APIRouter(prefix="/api")
 
 # Configure logging
@@ -90,8 +90,14 @@ class Token(BaseModel):
 class CityBase(BaseModel):
     name: str
     slug: str
+    country: str
     description_pt: str
     description_en: str
+    vibe_pt: str  # "Cosmopolita e vibrante"
+    vibe_en: str  # "Cosmopolitan and vibrant"
+    lifestyle_pt: str  # Description of local lifestyle
+    lifestyle_en: str
+    best_times: str  # "Mar-Mai, Set-Nov"
     image_base64: Optional[str] = None
 
 
@@ -102,85 +108,47 @@ class City(CityBase):
         populate_by_name = True
 
 
+class NeighborhoodBase(BaseModel):
+    city_id: str
+    name: str
+    slug: str
+    personality_pt: str  # "Boêmio e artístico"
+    personality_en: str  # "Bohemian and artistic"
+    description_pt: str
+    description_en: str
+
+
+class Neighborhood(NeighborhoodBase):
+    id: str = Field(alias="_id")
+
+    class Config:
+        populate_by_name = True
+
+
 class ExternalLinks(BaseModel):
     google_maps: Optional[str] = None
     instagram: Optional[str] = None
     website: Optional[str] = None
-    airbnb: Optional[str] = None
 
 
-class EventBase(BaseModel):
+class ExperienceBase(BaseModel):
     city_id: str
-    name_pt: str
-    name_en: str
-    description_pt: str
-    description_en: str
-    category: str
-    tags: List[str] = []
+    neighborhood_id: Optional[str] = None
+    title_pt: str
+    title_en: str
+    story_pt: str  # Storytelling description
+    story_en: str
+    categories: List[str] = []  # food, culture, nature, nightlife, walking, hidden_gems
+    vibes: List[str] = []  # chill, romantic, local, artistic, vibrant, calm
+    best_time: str  # "Manhã" / "Morning", "Final de tarde" / "Late afternoon"
+    price_range: str  # $ / $$ / $$$
+    local_tip_pt: str  # Informal, human tone
+    local_tip_en: str
     image_base64: Optional[str] = None
     external_links: ExternalLinks = ExternalLinks()
 
 
-class Event(EventBase):
-    id: str = Field(alias="_id")
-
-    class Config:
-        populate_by_name = True
-
-
-class PlaceBase(BaseModel):
-    city_id: str
-    name: str
-    description_pt: str
-    description_en: str
-    category: str  # eat, drink, activity
-    tags: List[str] = []
-    image_base64: Optional[str] = None
-    external_links: ExternalLinks = ExternalLinks()
-
-
-class Place(PlaceBase):
-    id: str = Field(alias="_id")
-
-    class Config:
-        populate_by_name = True
-
-
-class AccommodationBase(BaseModel):
-    city_id: str
-    name: str
-    description_pt: str
-    description_en: str
-    tags: List[str] = []
-    image_base64: Optional[str] = None
-    external_links: ExternalLinks = ExternalLinks()
-
-
-class Accommodation(AccommodationBase):
-    id: str = Field(alias="_id")
-
-    class Config:
-        populate_by_name = True
-
-
-class ItineraryItem(BaseModel):
-    name: str
-    description: str
-    type: str  # event, place, accommodation
-
-
-class ItineraryBase(BaseModel):
-    city_id: str
-    name_pt: str
-    name_en: str
-    type: str  # aventureiro, cultural, chilling
-    description_pt: str
-    description_en: str
-    items: List[ItineraryItem] = []
-    image_base64: Optional[str] = None
-
-
-class Itinerary(ItineraryBase):
+class Experience(ExperienceBase):
     id: str = Field(alias="_id")
 
     class Config:
@@ -188,7 +156,7 @@ class Itinerary(ItineraryBase):
 
 
 class FavoriteCreate(BaseModel):
-    item_type: str  # event, place, accommodation, itinerary
+    item_type: str  # experience
     item_id: str
 
 
@@ -248,25 +216,23 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @api_router.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate):
-    # Check if user exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Create user
     hashed_password = get_password_hash(user_data.password)
     user_dict = {
         "email": user_data.email,
         "password_hash": hashed_password,
         "name": user_data.name,
         "preferred_language": user_data.preferred_language,
+        "travel_style": user_data.travel_style,
         "created_at": datetime.utcnow()
     }
     
     result = await db.users.insert_one(user_dict)
     user_dict["_id"] = str(result.inserted_id)
     
-    # Create access token
     access_token = create_access_token(data={"sub": user_dict["_id"]})
     
     user_response = User(
@@ -274,6 +240,7 @@ async def register(user_data: UserCreate):
         email=user_dict["email"],
         name=user_dict["name"],
         preferred_language=user_dict["preferred_language"],
+        travel_style=user_dict.get("travel_style"),
         created_at=user_dict["created_at"]
     )
     
@@ -293,6 +260,7 @@ async def login(user_data: UserLogin):
         email=user["email"],
         name=user["name"],
         preferred_language=user["preferred_language"],
+        travel_style=user.get("travel_style"),
         created_at=user["created_at"]
     )
     
@@ -302,6 +270,21 @@ async def login(user_data: UserLogin):
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@api_router.patch("/auth/me")
+async def update_me(travel_style: Optional[str] = None, current_user: User = Depends(get_current_user)):
+    update_data = {}
+    if travel_style:
+        update_data["travel_style"] = travel_style
+    
+    if update_data:
+        await db.users.update_one(
+            {"_id": ObjectId(current_user.id)},
+            {"$set": update_data}
+        )
+    
+    return {"message": "Profile updated"}
 
 
 # ==================== Cities Routes ====================
@@ -320,89 +303,61 @@ async def get_city(city_id: str):
     return City(_id=str(city["_id"]), **{k: v for k, v in city.items() if k != "_id"})
 
 
-# ==================== Events Routes ====================
+# ==================== Neighborhoods Routes ====================
 
-@api_router.get("/events", response_model=List[Event])
-async def get_events(city_id: Optional[str] = None):
+@api_router.get("/neighborhoods", response_model=List[Neighborhood])
+async def get_neighborhoods(city_id: Optional[str] = None):
     query = {"city_id": city_id} if city_id else {}
-    events = await db.events.find(query).to_list(100)
-    return [Event(_id=str(event["_id"]), **{k: v for k, v in event.items() if k != "_id"}) for event in events]
+    neighborhoods = await db.neighborhoods.find(query).to_list(100)
+    return [Neighborhood(_id=str(n["_id"]), **{k: v for k, v in n.items() if k != "_id"}) for n in neighborhoods]
 
 
-@api_router.get("/events/{event_id}", response_model=Event)
-async def get_event(event_id: str):
-    event = await db.events.find_one({"_id": ObjectId(event_id)})
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-    return Event(_id=str(event["_id"]), **{k: v for k, v in event.items() if k != "_id"})
+@api_router.get("/neighborhoods/{neighborhood_id}", response_model=Neighborhood)
+async def get_neighborhood(neighborhood_id: str):
+    neighborhood = await db.neighborhoods.find_one({"_id": ObjectId(neighborhood_id)})
+    if not neighborhood:
+        raise HTTPException(status_code=404, detail="Neighborhood not found")
+    return Neighborhood(_id=str(neighborhood["_id"]), **{k: v for k, v in neighborhood.items() if k != "_id"})
 
 
-# ==================== Places Routes ====================
+# ==================== Experiences Routes ====================
 
-@api_router.get("/places", response_model=List[Place])
-async def get_places(city_id: Optional[str] = None, category: Optional[str] = None):
+@api_router.get("/experiences", response_model=List[Experience])
+async def get_experiences(
+    city_id: Optional[str] = None,
+    neighborhood_id: Optional[str] = None,
+    category: Optional[str] = None,
+    vibe: Optional[str] = None,
+    price_range: Optional[str] = None
+):
     query = {}
     if city_id:
         query["city_id"] = city_id
+    if neighborhood_id:
+        query["neighborhood_id"] = neighborhood_id
     if category:
-        query["category"] = category
+        query["categories"] = category
+    if vibe:
+        query["vibes"] = vibe
+    if price_range:
+        query["price_range"] = price_range
     
-    places = await db.places.find(query).to_list(100)
-    return [Place(_id=str(place["_id"]), **{k: v for k, v in place.items() if k != "_id"}) for place in places]
+    experiences = await db.experiences.find(query).to_list(200)
+    return [Experience(_id=str(exp["_id"]), **{k: v for k, v in exp.items() if k != "_id"}) for exp in experiences]
 
 
-@api_router.get("/places/{place_id}", response_model=Place)
-async def get_place(place_id: str):
-    place = await db.places.find_one({"_id": ObjectId(place_id)})
-    if not place:
-        raise HTTPException(status_code=404, detail="Place not found")
-    return Place(_id=str(place["_id"]), **{k: v for k, v in place.items() if k != "_id"})
-
-
-# ==================== Accommodations Routes ====================
-
-@api_router.get("/accommodations", response_model=List[Accommodation])
-async def get_accommodations(city_id: Optional[str] = None):
-    query = {"city_id": city_id} if city_id else {}
-    accommodations = await db.accommodations.find(query).to_list(100)
-    return [Accommodation(_id=str(acc["_id"]), **{k: v for k, v in acc.items() if k != "_id"}) for acc in accommodations]
-
-
-@api_router.get("/accommodations/{accommodation_id}", response_model=Accommodation)
-async def get_accommodation(accommodation_id: str):
-    accommodation = await db.accommodations.find_one({"_id": ObjectId(accommodation_id)})
-    if not accommodation:
-        raise HTTPException(status_code=404, detail="Accommodation not found")
-    return Accommodation(_id=str(accommodation["_id"]), **{k: v for k, v in accommodation.items() if k != "_id"})
-
-
-# ==================== Itineraries Routes ====================
-
-@api_router.get("/itineraries", response_model=List[Itinerary])
-async def get_itineraries(city_id: Optional[str] = None, type: Optional[str] = None):
-    query = {}
-    if city_id:
-        query["city_id"] = city_id
-    if type:
-        query["type"] = type
-    
-    itineraries = await db.itineraries.find(query).to_list(100)
-    return [Itinerary(_id=str(itin["_id"]), **{k: v for k, v in itin.items() if k != "_id"}) for itin in itineraries]
-
-
-@api_router.get("/itineraries/{itinerary_id}", response_model=Itinerary)
-async def get_itinerary(itinerary_id: str):
-    itinerary = await db.itineraries.find_one({"_id": ObjectId(itinerary_id)})
-    if not itinerary:
-        raise HTTPException(status_code=404, detail="Itinerary not found")
-    return Itinerary(_id=str(itinerary["_id"]), **{k: v for k, v in itinerary.items() if k != "_id"})
+@api_router.get("/experiences/{experience_id}", response_model=Experience)
+async def get_experience(experience_id: str):
+    experience = await db.experiences.find_one({"_id": ObjectId(experience_id)})
+    if not experience:
+        raise HTTPException(status_code=404, detail="Experience not found")
+    return Experience(_id=str(experience["_id"]), **{k: v for k, v in experience.items() if k != "_id"})
 
 
 # ==================== Favorites Routes ====================
 
 @api_router.post("/favorites", response_model=Favorite)
 async def create_favorite(favorite_data: FavoriteCreate, current_user: User = Depends(get_current_user)):
-    # Check if already favorited
     existing = await db.favorites.find_one({
         "user_id": current_user.id,
         "item_type": favorite_data.item_type,
@@ -458,212 +413,171 @@ async def delete_favorite_by_item(item_type: str, item_id: str, current_user: Us
     return {"message": "Favorite deleted"}
 
 
-# ==================== Seed Data Route ====================
+# ==================== Seed Premium Data Route ====================
 
-@api_router.post("/seed")
-async def seed_data():
-    """Seed database with sample data"""
+@api_router.post("/seed-premium")
+async def seed_premium_data():
+    """Seed database with premium curated experiences"""
     
     # Clear existing data
     await db.cities.delete_many({})
-    await db.events.delete_many({})
-    await db.places.delete_many({})
-    await db.accommodations.delete_many({})
-    await db.itineraries.delete_many({})
+    await db.neighborhoods.delete_many({})
+    await db.experiences.delete_many({})
     
-    # Insert cities
-    cities = [
-        {
-            "name": "São Paulo",
-            "slug": "sao-paulo",
-            "description_pt": "A maior metrópole da América Latina, vibrante e cosmopolita",
-            "description_en": "Latin America's largest metropolis, vibrant and cosmopolitan",
-            "image_base64": None
-        },
-        {
-            "name": "Rio de Janeiro",
-            "slug": "rio-de-janeiro",
-            "description_pt": "Cidade maravilhosa com praias icônicas e natureza exuberante",
-            "description_en": "Marvelous city with iconic beaches and lush nature",
-            "image_base64": None
-        },
-        {
-            "name": "Salvador",
-            "slug": "salvador",
-            "description_pt": "Capital da cultura afro-brasileira com história rica",
-            "description_en": "Capital of Afro-Brazilian culture with rich history",
-            "image_base64": None
-        },
-        {
-            "name": "Florianópolis",
-            "slug": "florianopolis",
-            "description_pt": "Ilha mágica com 42 praias paradisíacas",
-            "description_en": "Magic island with 42 paradisiacal beaches",
-            "image_base64": None
-        }
-    ]
+    # ===== SÃO PAULO =====
+    sp_city = {
+        "name": "São Paulo",
+        "slug": "sao-paulo",
+        "country": "Brazil",
+        "description_pt": "A maior metrópole da América Latina",
+        "description_en": "Latin America's largest metropolis",
+        "vibe_pt": "Cosmopolita, vibrante e cultural",
+        "vibe_en": "Cosmopolitan, vibrant and cultural",
+        "lifestyle_pt": "Paulistanos vivem intensamente: trabalham muito, mas sabem aproveitar. A cidade nunca para, há sempre algo novo acontecendo.",
+        "lifestyle_en": "Paulistanos live intensely: they work hard but know how to enjoy life. The city never stops, there's always something new happening.",
+        "best_times": "Mar-Mai, Set-Nov",
+        "image_base64": None
+    }
+    sp_result = await db.cities.insert_one(sp_city)
+    sp_id = str(sp_result.inserted_id)
     
-    city_results = await db.cities.insert_many(cities)
-    city_ids = [str(id) for id in city_results.inserted_ids]
+    # SP Neighborhoods
+    vila_madalena = {
+        "city_id": sp_id,
+        "name": "Vila Madalena",
+        "slug": "vila-madalena",
+        "personality_pt": "Boêmio, artístico e descolado",
+        "personality_en": "Bohemian, artistic and cool",
+        "description_pt": "O coração cultural alternativo de SP, com galerias de arte de rua, bares charmosos e uma vibe jovem e criativa.",
+        "description_en": "SP's alternative cultural heart, with street art galleries, charming bars and a young, creative vibe."
+    }
+    vm_result = await db.neighborhoods.insert_one(vila_madalena)
+    vm_id = str(vm_result.inserted_id)
     
-    # Sample events for São Paulo
-    events_sp = [
+    pinheiros = {
+        "city_id": sp_id,
+        "name": "Pinheiros",
+        "slug": "pinheiros",
+        "personality_pt": "Gastronômico e vibrante",
+        "personality_en": "Gastronomic and vibrant",
+        "description_pt": "Reduto gastronômico paulistano, onde chefs inovam e a vida noturna ferve.",
+        "description_en": "São Paulo's gastronomic stronghold, where chefs innovate and nightlife thrives."
+    }
+    pin_result = await db.neighborhoods.insert_one(pinheiros)
+    pin_id = str(pin_result.inserted_id)
+    
+    # SP Premium Experiences
+    experiences_sp = [
         {
-            "city_id": city_ids[0],
-            "name_pt": "Festival de Jazz no Parque",
-            "name_en": "Jazz Festival in the Park",
-            "description_pt": "Festival anual de jazz ao ar livre com artistas locais e internacionais",
-            "description_en": "Annual outdoor jazz festival with local and international artists",
-            "category": "music",
-            "tags": ["local favorite", "music", "outdoor"],
+            "city_id": sp_id,
+            "neighborhood_id": vm_id,
+            "title_pt": "Café da manhã no Estadão",
+            "title_en": "Breakfast at Estadão",
+            "story_pt": "Um ritual paulistano: o pão francês quentinho às 6h da manhã. Aqui você entende porque o paulistano acorda cedo. A padaria abre 24h e vive cheia de moradores do bairro.",
+            "story_en": "A São Paulo ritual: warm french bread at 6am. Here you understand why paulistanos wake up early. The bakery opens 24/7 and is always full of locals.",
+            "categories": ["food", "local"],
+            "vibes": ["local", "authentic", "calm"],
+            "best_time": "Manhã cedo (6h-9h) / Early morning (6am-9am)",
+            "price_range": "$",
+            "local_tip_pt": "Peça o pão na chapa com manteiga. É simples, mas é São Paulo no seu melhor.",
+            "local_tip_en": "Order the 'pão na chapa' with butter. It's simple, but it's São Paulo at its best.",
             "image_base64": None,
             "external_links": {
-                "google_maps": "https://maps.google.com/?q=Ibirapuera+Park+São+Paulo",
-                "instagram": "https://instagram.com/explore/tags/jazzsp",
-                "website": None,
-                "airbnb": None
+                "google_maps": "https://maps.google.com/?q=Padaria+Estadão+Vila+Madalena",
+                "instagram": "https://instagram.com/explore/tags/padariaestadao",
+                "website": None
             }
         },
         {
-            "city_id": city_ids[0],
-            "name_pt": "Feira de Arte da Paulista",
-            "name_en": "Paulista Art Fair",
-            "description_pt": "Feira de arte e artesanato aos domingos na Avenida Paulista",
-            "description_en": "Art and craft fair on Sundays at Paulista Avenue",
-            "category": "art",
-            "tags": ["hidden gem", "art", "local favorite"],
-            "image_base64": None,
-            "external_links": {
-                "google_maps": "https://maps.google.com/?q=Avenida+Paulista+São+Paulo",
-                "instagram": "https://instagram.com/explore/tags/feirapaulista",
-                "website": None,
-                "airbnb": None
-            }
-        }
-    ]
-    
-    await db.events.insert_many(events_sp)
-    
-    # Sample places for São Paulo
-    places_sp = [
-        {
-            "city_id": city_ids[0],
-            "name": "Bar do Arnesto",
-            "description_pt": "Boteco tradicional paulistano com petiscos autênticos e chopp gelado",
-            "description_en": "Traditional São Paulo bar with authentic snacks and cold draft beer",
-            "category": "drink",
-            "tags": ["local favorite", "authentic", "hidden gem"],
-            "image_base64": None,
-            "external_links": {
-                "google_maps": "https://maps.google.com/?q=Bar+do+Arnesto+São+Paulo",
-                "instagram": "https://instagram.com/bardoarnesto",
-                "website": None,
-                "airbnb": None
-            }
-        },
-        {
-            "city_id": city_ids[0],
-            "name": "Mocotó",
-            "description_pt": "Restaurante nordestino famoso pela comida regional de alto nível",
-            "description_en": "Northeastern restaurant famous for high-end regional cuisine",
-            "category": "eat",
-            "tags": ["local favorite", "traditional", "must-visit"],
-            "image_base64": None,
-            "external_links": {
-                "google_maps": "https://maps.google.com/?q=Mocotó+São+Paulo",
-                "instagram": "https://instagram.com/restaurantemocoto",
-                "website": "https://www.mocoto.com.br",
-                "airbnb": None
-            }
-        },
-        {
-            "city_id": city_ids[0],
-            "name": "Beco do Batman",
-            "description_pt": "Galeria de arte de rua a céu aberto no bairro da Vila Madalena",
-            "description_en": "Open-air street art gallery in Vila Madalena neighborhood",
-            "category": "activity",
-            "tags": ["instagram-worthy", "art", "tourist-friendly"],
+            "city_id": sp_id,
+            "neighborhood_id": vm_id,
+            "title_pt": "Arte de rua no Beco do Batman",
+            "title_en": "Street art at Beco do Batman",
+            "story_pt": "Não é só pra foto. É um museu vivo onde a arte muda a cada semana. Artistas locais e internacionais deixam suas marcas nessas paredes. Melhor ir num final de tarde, quando a luz fica perfeita.",
+            "story_en": "It's not just for photos. It's a living museum where art changes every week. Local and international artists leave their marks on these walls. Best to go in the late afternoon when the light is perfect.",
+            "categories": ["culture", "walking", "hidden_gems"],
+            "vibes": ["artistic", "vibrant", "local"],
+            "best_time": "Final de tarde / Late afternoon",
+            "price_range": "$",
+            "local_tip_pt": "Depois, tome uma cerveja no Bar do Ló, bem ao lado. Os locais estão sempre lá.",
+            "local_tip_en": "Afterwards, grab a beer at Bar do Ló, right next door. The locals are always there.",
             "image_base64": None,
             "external_links": {
                 "google_maps": "https://maps.google.com/?q=Beco+do+Batman+São+Paulo",
                 "instagram": "https://instagram.com/explore/tags/becodobatman",
-                "website": None,
-                "airbnb": None
+                "website": None
             }
-        }
-    ]
-    
-    await db.places.insert_many(places_sp)
-    
-    # Sample accommodations
-    accommodations_sp = [
+        },
         {
-            "city_id": city_ids[0],
-            "name": "Airbnb Loft Vila Madalena",
-            "description_pt": "Loft charmoso no coração da Vila Madalena, perto de bares e galerias",
-            "description_en": "Charming loft in the heart of Vila Madalena, close to bars and galleries",
-            "tags": ["local experience", "central", "trendy"],
+            "city_id": sp_id,
+            "neighborhood_id": pin_id,
+            "title_pt": "Jantar no Bar da Dona Onça",
+            "title_en": "Dinner at Bar da Dona Onça",
+            "story_pt": "A chef Helena Rizzo reimagina a comida brasileira com técnica e afeto. O ambiente lembra a casa da avó, mas com drinks sofisticados e pratos que contam histórias.",
+            "story_en": "Chef Helena Rizzo reimagines Brazilian food with technique and affection. The atmosphere reminds you of grandma's house, but with sophisticated drinks and dishes that tell stories.",
+            "categories": ["food", "nightlife"],
+            "vibes": ["romantic", "vibrant", "local"],
+            "best_time": "Jantar (19h-22h) / Dinner (7pm-10pm)",
+            "price_range": "$$$",
+            "local_tip_pt": "Reserve com antecedência. E peça a barriga de porco - é imperdível.",
+            "local_tip_en": "Book in advance. And order the pork belly - it's unmissable.",
             "image_base64": None,
             "external_links": {
-                "google_maps": "https://maps.google.com/?q=Vila+Madalena+São+Paulo",
-                "instagram": None,
-                "website": None,
-                "airbnb": "https://www.airbnb.com/s/Vila-Madalena--São-Paulo"
+                "google_maps": "https://maps.google.com/?q=Bar+da+Dona+Onça+São+Paulo",
+                "instagram": "https://instagram.com/bardonaonca",
+                "website": "https://www.bardonaonca.com.br"
+            }
+        },
+        {
+            "city_id": sp_id,
+            "neighborhood_id": None,
+            "title_pt": "Caminhar no Parque Ibirapuera ao amanhecer",
+            "title_en": "Walk in Ibirapuera Park at sunrise",
+            "story_pt": "O pulmão verde de São Paulo ganha vida antes do caos urbano começar. Corredores, ciclistas e yogues dividem espaço em harmonia. É quando a cidade respira.",
+            "story_en": "São Paulo's green lung comes alive before urban chaos begins. Runners, cyclists and yogis share space in harmony. It's when the city breathes.",
+            "categories": ["nature", "walking"],
+            "vibes": ["calm", "local"],
+            "best_time": "Amanhecer (6h-8h) / Sunrise (6am-8am)",
+            "price_range": "$",
+            "local_tip_pt": "Leve um mate gelado e sente perto do lago. Observe os paulistanos no seu momento zen.",
+            "local_tip_en": "Bring a cold mate and sit by the lake. Watch paulistanos in their zen moment.",
+            "image_base64": None,
+            "external_links": {
+                "google_maps": "https://maps.google.com/?q=Parque+Ibirapuera+São+Paulo",
+                "instagram": "https://instagram.com/explore/tags/parqueibirapuera",
+                "website": None
+            }
+        },
+        {
+            "city_id": sp_id,
+            "neighborhood_id": vm_id,
+            "title_pt": "Cerveja artesanal no Cervejaria Nacional",
+            "title_en": "Craft beer at Cervejaria Nacional",
+            "story_pt": "Não é só mais uma cervejaria. É onde cervejeiros experimentam receitas doidas e o público é convidado a provar. O clima é de boteco refinado - todo mundo se conhece.",
+            "story_en": "It's not just another brewery. It's where brewers experiment with crazy recipes and the public is invited to taste. The atmosphere is refined pub style - everyone knows each other.",
+            "categories": ["nightlife", "local"],
+            "vibes": ["chill", "local", "vibrant"],
+            "best_time": "Fim de tarde / Late afternoon",
+            "price_range": "$$",
+            "local_tip_pt": "Vai às quintas-feiras quando tem música ao vivo. E prova a IPA da casa.",
+            "local_tip_en": "Go on Thursdays when there's live music. And try the house IPA.",
+            "image_base64": None,
+            "external_links": {
+                "google_maps": "https://maps.google.com/?q=Cervejaria+Nacional+Vila+Madalena",
+                "instagram": "https://instagram.com/cervejarianacional",
+                "website": None
             }
         }
     ]
     
-    await db.accommodations.insert_many(accommodations_sp)
+    await db.experiences.insert_many(experiences_sp)
     
-    # Sample itineraries
-    itineraries_sp = [
-        {
-            "city_id": city_ids[0],
-            "name_pt": "SP Aventureiro",
-            "name_en": "SP Adventurer",
-            "type": "aventureiro",
-            "description_pt": "Explore o lado radical de São Paulo: escalada urbana, bike tours e parques",
-            "description_en": "Explore São Paulo's radical side: urban climbing, bike tours and parks",
-            "items": [
-                {"name": "Parque Ibirapuera", "description": "Cicloturismo no maior parque da cidade", "type": "activity"},
-                {"name": "Escalada no CEU", "description": "Parede de escalada urbana", "type": "activity"},
-                {"name": "Mercado Municipal", "description": "Explore a gastronomia local", "type": "place"}
-            ],
-            "image_base64": None
-        },
-        {
-            "city_id": city_ids[0],
-            "name_pt": "SP Cultural",
-            "name_en": "SP Cultural",
-            "type": "cultural",
-            "description_pt": "Mergulhe na cena cultural: museus, teatros e arte de rua",
-            "description_en": "Dive into the cultural scene: museums, theaters and street art",
-            "items": [
-                {"name": "MASP", "description": "Museu de Arte de São Paulo", "type": "activity"},
-                {"name": "Beco do Batman", "description": "Arte de rua na Vila Madalena", "type": "activity"},
-                {"name": "Theatro Municipal", "description": "Arquitetura histórica", "type": "activity"}
-            ],
-            "image_base64": None
-        },
-        {
-            "city_id": city_ids[0],
-            "name_pt": "SP Chilling",
-            "name_en": "SP Chilling",
-            "type": "chilling",
-            "description_pt": "Relaxe em cafés charmosos, parques tranquilos e bares descontraídos",
-            "description_en": "Relax in charming cafes, peaceful parks and laid-back bars",
-            "items": [
-                {"name": "Café Floresta", "description": "Café aconchegante com wifi", "type": "place"},
-                {"name": "Parque Buenos Aires", "description": "Parque tranquilo para relaxar", "type": "activity"},
-                {"name": "Bar do Arnesto", "description": "Boteco tradicional", "type": "place"}
-            ],
-            "image_base64": None
-        }
-    ]
-    
-    await db.itineraries.insert_many(itineraries_sp)
-    
-    return {"message": "Database seeded successfully", "cities_created": len(city_ids)}
+    return {
+        "message": "Premium data seeded successfully",
+        "cities": 1,
+        "neighborhoods": 2,
+        "experiences": len(experiences_sp)
+    }
 
 
 # Include router
