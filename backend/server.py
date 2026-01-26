@@ -74,6 +74,7 @@ class User(BaseModel):
     email: str
     name: str
     preferred_language: str
+    travel_style: Optional[str] = None
     created_at: datetime
 
     class Config:
