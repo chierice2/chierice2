@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Leitor de Cartões</title>
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Cartões" />
+  <link id="favicon" rel="icon" />
+  <link id="apple-icon" rel="apple-touch-icon" />
+  <link id="manifest" rel="manifest" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Garante o fluxo de telas mesmo se o CDN do Tailwind não carregar */
+    .hidden { display: none !important; }
+    body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
+    .safe-top { padding-top: max(env(safe-area-inset-top), 0.75rem); }
+    .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 1rem); }
+    .spinner { border: 4px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 9999px; width: 3rem; height: 3rem; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast-enter { animation: toastIn .25s ease-out; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(1rem); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen antialiased">
+
+  <!-- Cabeçalho -->
+  <header class="safe-top sticky top-0 z-20 bg-slate-900 text-white shadow">
+    <div class="max-w-md mx-auto flex items-center justify-between px-4 pb-3">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">📇</span>
+        <h1 class="text-lg font-semibold tracking-tight">Leitor de Cartões</h1>
+      </div>
+      <button id="btnSettings" class="p-2 rounded-full hover:bg-white/10 active:bg-white/20" aria-label="Configurações">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.3 4.3c.4-1.7 3-1.7 3.4 0a1.7 1.7 0 0 0 2.6 1.1c1.5-.9 3.3.8 2.4 2.4a1.7 1.7 0 0 0 1 2.5c1.8.4 1.8 3 0 3.4a1.7 1.7 0 0 0-1 2.6c.9 1.5-.9 3.3-2.4 2.4a1.7 1.7 0 0 0-2.6 1c-.4 1.8-3 1.8-3.4 0a1.7 1.7 0 0 0-2.5-1c-1.6.9-3.3-.9-2.4-2.4a1.7 1.7 0 0 0-1.1-2.6c-1.7-.4-1.7-3 0-3.4a1.7 1.7 0 0 0 1.1-2.5c-.9-1.6.8-3.3 2.4-2.4a1.7 1.7 0 0 0 2.5-1.1Z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 pt-4 safe-bottom">
+
+    <!-- Aviso de configuração -->
+    <div id="configWarning" class="hidden mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+      ⚠️ Configure a <b>API Key da Anthropic</b> e a <b>URL do Webhook</b> antes de começar.
+      <button id="btnOpenSettingsInline" class="underline font-medium">Abrir configurações</button>
+    </div>
+
+    <!-- ETAPA 1: Captura -->
+    <section id="stepCapture" class="space-y-4">
+      <input id="fileInput" type="file" accept="image/*" capture="environment" class="hidden" />
+      <input id="galleryInput" type="file" accept="image/*" class="hidden" />
+
+      <!-- Estado vazio -->
+      <div id="captureEmpty">
+        <button id="btnCamera"
+          class="w-full aspect-[4/3] rounded-2xl border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center gap-3 text-slate-600 active:scale-[.99] active:bg-slate-50 transition shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 text-slate-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6.8 6.2A2.3 2.3 0 0 1 4.9 7.2c-.4 0-.8.1-1.1.1C2.7 7.5 2 8.4 2 9.4V18a2.3 2.3 0 0 0 2.3 2.3h15.5A2.3 2.3 0 0 0 22 18V9.4c0-1-.7-1.9-1.8-2-.4-.1-.8-.1-1.1-.2a2.3 2.3 0 0 1-1.9-1l-.8-1.3a2.2 2.2 0 0 0-1.8-1.1 48.8 48.8 0 0 0-5.2 0 2.2 2.2 0 0 0-1.8 1.1l-.8 1.3Z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.8a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"/>
+          </svg>
+          <span class="text-lg font-semibold text-slate-900">Fotografar cartão</span>
+          <span class="text-xs text-slate-500">Toque para abrir a câmera</span>
+        </button>
+        <button id="btnGallery" class="mt-2 w-full text-sm text-slate-600 underline py-2">ou escolher da galeria</button>
+      </div>
+
+      <!-- Preview -->
+      <div id="capturePreview" class="hidden">
+        <div class="relative rounded-2xl overflow-hidden bg-black shadow">
+          <img id="previewImg" alt="Prévia do cartão" class="w-full max-h-80 object-contain" />
+          <button id="btnDiscard"
+            class="absolute top-2 right-2 bg-black/60 text-white text-sm rounded-full px-3 py-1.5 backdrop-blur active:bg-black/80">
+            ✕ Descartar
+          </button>
+        </div>
+        <button id="btnRetake" class="mt-2 w-full text-sm text-slate-600 underline py-2">Tirar outra foto</button>
+      </div>
+
+      <!-- Observação -->
+      <div>
+        <label for="obsInput" class="block text-sm font-medium text-slate-700 mb-1">Observação sobre o contato</label>
+        <textarea id="obsInput" rows="3" placeholder="Ex.: Conversamos na feira sobre cotação de contêineres. Pediu catálogo por e-mail."
+          class="w-full rounded-xl border border-slate-300 bg-white p-3 text-base focus:outline-none focus:ring-2 focus:ring-slate-900"></textarea>
+      </div>
+
+      <button id="btnProcess" disabled
+        class="w-full rounded-xl bg-slate-900 text-white py-4 text-lg font-semibold shadow disabled:opacity-40 disabled:cursor-not-allowed active:scale-[.99] transition">
+        🔍 Processar Cartão
+      </button>
+    </section>
+
+    <!-- ETAPA 2: Revisão -->
+    <section id="stepReview" class="hidden space-y-4">
+      <div class="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm">
+        <img id="reviewThumb" alt="" class="w-20 h-14 object-cover rounded-lg bg-slate-200" />
+        <div class="text-sm">
+          <p class="font-semibold">Revise os dados extraídos</p>
+          <p class="text-slate-500">Corrija o que for necessário antes de salvar.</p>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-white p-4 shadow-sm space-y-4">
+        <div>
+          <label for="fEmpresa" class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Nome da Empresa</label>
+          <input id="fEmpresa" type="text" class="w-full rounded-lg border border-slate-300 p-3 text-base focus:outline-none focus:ring-2 focus:ring-slate-900" />
+        </div>
+        <div>
+          <label for="fTelefones" class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Telefones <span class="normal-case font-normal">(um por linha)</span></label>
+          <textarea id="fTelefones" rows="2" inputmode="tel" class="w-full rounded-lg border border-slate-300 p-3 text-base font-mono focus:outline-none focus:ring-2 focus:ring-slate-900"></textarea>
+        </div>
+        <div>
+          <label for="fEmails" class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">E-mails <span class="normal-case font-normal">(um por linha)</span></label>
+          <textarea id="fEmails" rows="2" inputmode="email" autocapitalize="off" class="w-full rounded-lg border border-slate-300 p-3 text-base font-mono focus:outline-none focus:ring-2 focus:ring-slate-900"></textarea>
+        </div>
+        <div>
+          <label for="fPais" class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">País</label>
+          <input id="fPais" type="text" class="w-full rounded-lg border border-slate-300 p-3 text-base focus:outline-none focus:ring-2 focus:ring-slate-900" />
+        </div>
+        <div>
+          <label for="fObs" class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Observações do Usuário</label>
+          <textarea id="fObs" rows="3" class="w-full rounded-lg border border-slate-300 p-3 text-base focus:outline-none focus:ring-2 focus:ring-slate-900"></textarea>
+        </div>
+      </div>
+
+      <button id="btnSave"
+        class="w-full rounded-xl bg-emerald-600 text-white py-4 text-lg font-semibold shadow active:scale-[.99] transition disabled:opacity-50">
+        💾 Salvar na Planilha
+      </button>
+      <button id="btnBack" class="w-full rounded-xl border border-slate-300 bg-white py-3 font-medium text-slate-700 active:bg-slate-50">
+        ← Voltar e refazer a foto
+      </button>
+    </section>
+
+    <!-- ETAPA 3: Sucesso -->
+    <section id="stepDone" class="hidden">
+      <div class="rounded-2xl bg-white p-6 shadow-sm text-center space-y-3">
+        <div class="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-3xl">✅</div>
+        <h2 class="text-xl font-semibold">Contato salvo!</h2>
+        <p id="doneSummary" class="text-slate-600 text-sm break-words"></p>
+      </div>
+      <button id="btnNext" class="mt-4 w-full rounded-xl bg-slate-900 text-white py-4 text-lg font-semibold shadow active:scale-[.99] transition">
+        📷 Ler próximo cartão
+      </button>
+    </section>
+  </main>
+
+  <!-- Loading -->
+  <div id="loading" class="hidden fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4 text-white">
+    <div class="spinner"></div>
+    <p id="loadingText" class="text-base font-medium">Processando…</p>
+  </div>
+
+  <!-- Configurações -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
+    <div class="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-5 safe-bottom space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Configurações</h2>
+        <button id="btnCloseSettings" class="p-2 -mr-2 text-slate-500 text-xl" aria-label="Fechar">✕</button>
+      </div>
+
+      <div>
+        <label for="cfgApiKey" class="block text-sm font-medium text-slate-700 mb-1">API Key da Anthropic</label>
+        <div class="flex gap-2">
+          <input id="cfgApiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-..."
+            class="flex-1 min-w-0 rounded-lg border border-slate-300 p-3 text-base font-mono focus:outline-none focus:ring-2 focus:ring-slate-900" />
+          <button id="btnToggleKey" type="button" class="px-3 rounded-lg border border-slate-300 text-sm">👁</button>
+        </div>
+      </div>
+
+      <div>
+        <label for="cfgWebhook" class="block text-sm font-medium text-slate-700 mb-1">URL do Webhook (Google Apps Script)</label>
+        <input id="cfgWebhook" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/.../exec"
+          class="w-full rounded-lg border border-slate-300 p-3 text-base font-mono focus:outline-none focus:ring-2 focus:ring-slate-900" />
+      </div>
+
+      <div>
+        <label for="cfgToken" class="block text-sm font-medium text-slate-700 mb-1">Token secreto do webhook <span class="text-slate-400 font-normal">(opcional)</span></label>
+        <input id="cfgToken" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Mesmo valor de SECRET_TOKEN no .gs"
+          class="w-full rounded-lg border border-slate-300 p-3 text-base font-mono focus:outline-none focus:ring-2 focus:ring-slate-900" />
+      </div>
+
+      <div>
+        <label for="cfgModel" class="block text-sm font-medium text-slate-700 mb-1">Modelo Claude</label>
+        <input id="cfgModel" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+          class="w-full rounded-lg border border-slate-300 p-3 text-base font-mono focus:outline-none focus:ring-2 focus:ring-slate-900" />
+      </div>
+
+      <p class="text-xs text-slate-500 leading-relaxed">
+        Os dados ficam salvos apenas no <code>localStorage</code> deste navegador. A chave é enviada diretamente
+        do celular para a API da Anthropic — use uma chave dedicada, com limite de gastos, e não compartilhe este aparelho.
+      </p>
+
+      <div class="flex gap-2">
+        <button id="btnClearSettings" class="flex-1 rounded-xl border border-red-300 text-red-700 py-3 font-medium">Apagar</button>
+        <button id="btnSaveSettings" class="flex-[2] rounded-xl bg-slate-900 text-white py-3 font-semibold">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div id="toastHost" class="fixed bottom-4 inset-x-0 z-[60] flex flex-col items-center gap-2 px-4 pointer-events-none"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Constantes
+  // ---------------------------------------------------------------------------
+  const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+  const DEFAULT_MODEL = 'claude-opus-5';
+  const MAX_IMAGE_SIDE = 1568;      // lado máximo recomendado para visão
+  const JPEG_QUALITY = 0.85;
+  const API_TIMEOUT_MS = 120000;
+  const STORAGE = { apiKey: 'bc_api_key', webhook: 'bc_webhook_url', token: 'bc_webhook_token', model: 'bc_model' };
+
+  const SYSTEM_PROMPT = `Você é um especialista em leitura (OCR) de cartões de visita corporativos do mundo inteiro, em qualquer idioma e alfabeto (latino, cirílico, chinês, japonês, coreano, árabe, hebraico, tailandês, devanágari etc.).
+
+Analise a imagem do cartão e extraia os dados abaixo. Responda ESTRITAMENTE com um único objeto JSON válido, sem nenhum texto antes ou depois, sem markdown, exatamente neste formato:
+
+{
+  "empresa": "Nome da empresa identificado",
+  "telefones": ["+55 11 99999-9999"],
+  "emails": ["contato@empresa.com"],
+  "pais": "Nome do país em português (se não estiver escrito, deduza pelo DDI, cidade ou domínio do site/email)"
+}
+
+Regras:
+- "empresa": nome da empresa como aparece no cartão. Se estiver em alfabeto não latino e houver versão em alfabeto latino/inglês no cartão, use a versão latina. Se só existir em alfabeto não latino, escreva o original seguido da transliteração entre parênteses. Se não houver empresa identificável, use "".
+- "telefones": todos os números (fixo, celular, WhatsApp, fax), cada um no formato internacional "+DDI DDD NÚMERO". Se o DDI não estiver impresso, deduza-o pelo país do cartão. Remova o "0" de tronco nacional quando adicionar o DDI (ex.: 030 1234 5678 na Alemanha → +49 30 1234 5678). Não invente números.
+- "emails": todos os e-mails, em minúsculas, sem espaços. Não invente e-mails.
+- "pais": nome do país em português do Brasil (ex.: "Alemanha", "China", "Estados Unidos", "Emirados Árabes Unidos"). Se não estiver escrito, deduza pelo DDI, cidade/endereço ou domínio (.de, .cn, .com.br etc.). Se for impossível deduzir, use "".
+- Listas vazias quando não houver dados: [].`;
+
+  const OUTPUT_SCHEMA = {
+    type: 'object',
+    properties: {
+      empresa: { type: 'string' },
+      telefones: { type: 'array', items: { type: 'string' } },
+      emails: { type: 'array', items: { type: 'string' } },
+      pais: { type: 'string' }
+    },
+    required: ['empresa', 'telefones', 'emails', 'pais'],
+    additionalProperties: false
+  };
+
+  // ---------------------------------------------------------------------------
+  // Utilidades
+  // ---------------------------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+    set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch { /* armazenamento bloqueado */ } }
+  };
+
+  const config = () => ({
+    apiKey: store.get(STORAGE.apiKey).trim(),
+    webhook: store.get(STORAGE.webhook).trim(),
+    token: store.get(STORAGE.token).trim(),
+    model: store.get(STORAGE.model).trim() || DEFAULT_MODEL
+  });
+
+  function toast(message, type = 'info', ms = 3500) {
+    const colors = { info: 'bg-slate-900', success: 'bg-emerald-600', error: 'bg-red-600', warn: 'bg-amber-600' };
+    const el = document.createElement('div');
+    el.className = `toast-enter pointer-events-auto max-w-md w-full rounded-xl px-4 py-3 text-white text-sm shadow-lg ${colors[type] || colors.info}`;
+    el.textContent = message;
+    el.setAttribute('role', 'status');
+    $('toastHost').appendChild(el);
+    setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, ms);
+  }
+
+  function setLoading(on, text = 'Processando…') {
+    $('loadingText').textContent = text;
+    $('loading').classList.toggle('hidden', !on);
+  }
+
+  function showStep(step) {
+    ['stepCapture', 'stepReview', 'stepDone'].forEach((id) => $(id).classList.toggle('hidden', id !== step));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  const splitLines = (s) => s.split(/[\n;,]+/).map((x) => x.trim()).filter(Boolean);
+  const uniq = (arr) => [...new Set(arr)];
+
+  async function fetchWithTimeout(url, opts, ms) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+    finally { clearTimeout(t); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Imagem: redimensiona e converte para JPEG base64
+  // ---------------------------------------------------------------------------
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Não foi possível ler a imagem. Tente outra foto (formatos JPG/PNG).')); };
+      img.src = url;
+    });
+  }
+
+  async function prepareImage(file) {
+    const img = await loadImage(file);
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+    return { dataUrl, base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Claude API
+  // ---------------------------------------------------------------------------
+  function parseJsonLoose(text) {
+    const cleaned = text.replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+    try { return JSON.parse(cleaned); } catch { /* tenta extrair o objeto */ }
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start !== -1 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+    throw new Error('A resposta do modelo não é um JSON válido.');
+  }
+
+  function normalizeResult(r) {
+    const arr = (v) => (Array.isArray(v) ? v : typeof v === 'string' && v ? [v] : []).map((x) => String(x).trim()).filter(Boolean);
+    return {
+      empresa: typeof r.empresa === 'string' ? r.empresa.trim() : '',
+      telefones: uniq(arr(r.telefones)),
+      emails: uniq(arr(r.emails).map((e) => e.toLowerCase().replace(/\s+/g, ''))),
+      pais: typeof r.pais === 'string' ? r.pais.trim() : ''
+    };
+  }
+
+  async function extractWithClaude(image, cfg) {
+    const body = {
+      model: cfg.model,
+      max_tokens: 8000,
+      system: SYSTEM_PROMPT,
+      output_config: {
+        effort: 'medium',
+        format: { type: 'json_schema', schema: OUTPUT_SCHEMA }
+      },
+      fallbacks: 'default',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.base64 } },
+          { type: 'text', text: 'Extraia os dados deste cartão de visita e responda apenas com o JSON.' }
+        ]
+      }]
+    };
+
+    let res;
+    try {
+      res = await fetchWithTimeout(ANTHROPIC_URL, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': cfg.apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'server-side-fallback-2026-07-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify(body)
+      }, API_TIMEOUT_MS);
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('Tempo esgotado ao falar com a API. Verifique sua conexão e tente de novo.');
+      throw new Error('Falha de rede ao acessar a API da Anthropic. Verifique sua conexão.');
+    }
+
+    let data = null;
+    try { data = await res.json(); } catch { /* corpo não-JSON */ }
+
+    if (!res.ok) {
+      const apiMsg = data?.error?.message || res.statusText;
+      const byStatus = {
+        400: 'Requisição inválida',
+        401: 'API Key inválida — confira nas configurações',
+        403: 'API Key sem permissão',
+        404: 'Modelo não encontrado — confira o nome do modelo',
+        413: 'Imagem grande demais',
+        429: 'Limite de uso atingido — aguarde um pouco',
+        529: 'API sobrecarregada — tente novamente em instantes'
+      };
+      const prefix = byStatus[res.status] || (res.status >= 500 ? 'Erro no servidor da Anthropic' : `Erro ${res.status}`);
+      throw new Error(`${prefix}: ${apiMsg}`);
+    }
+
+    if (data?.stop_reason === 'refusal') throw new Error('O modelo recusou processar esta imagem. Tente outra foto.');
+    if (data?.stop_reason === 'max_tokens') throw new Error('A resposta do modelo foi cortada. Tente novamente.');
+
+    const text = (data?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+    if (!text) throw new Error('O modelo não retornou dados.');
+    return normalizeResult(parseJsonLoose(text));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Google Apps Script webhook
+  // ---------------------------------------------------------------------------
+  async function saveToSheet(payload, cfg) {
+    let res;
+    try {
+      // text/plain evita o preflight CORS, que o Apps Script não suporta.
+      res = await fetchWithTimeout(cfg.webhook, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }, 30000);
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('Tempo esgotado ao salvar na planilha.');
+      throw new Error('Falha ao acessar o webhook. Confira a URL e se o script está implantado para "Qualquer pessoa".');
+    }
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch {
+      throw new Error(text.includes('<html') || text.includes('<!DOCTYPE')
+        ? 'O webhook retornou uma página HTML — verifique se a implantação está com acesso "Qualquer pessoa".'
+        : 'Resposta inesperada do webhook.');
+    }
+    if (!res.ok || data.status !== 'success') throw new Error(data.message || `Erro ao salvar (HTTP ${res.status}).`);
+    return data;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Estado e fluxo
+  // ---------------------------------------------------------------------------
+  let currentImage = null;
+
+  function refreshConfigWarning() {
+    const c = config();
+    $('configWarning').classList.toggle('hidden', !!(c.apiKey && c.webhook));
+  }
+
+  function updateProcessButton() {
+    $('btnProcess').disabled = !currentImage;
+  }
+
+  async function handleFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/') && file.type !== '') { toast('Selecione um arquivo de imagem.', 'error'); return; }
+    setLoading(true, 'Preparando imagem…');
+    try {
+      currentImage = await prepareImage(file);
+      $('previewImg').src = currentImage.dataUrl;
+      $('captureEmpty').classList.add('hidden');
+      $('capturePreview').classList.remove('hidden');
+    } catch (e) {
+      currentImage = null;
+      toast(e.message, 'error', 5000);
+    } finally {
+      setLoading(false);
+      updateProcessButton();
+    }
+  }
+
+  function discardImage() {
+    currentImage = null;
+    $('previewImg').removeAttribute('src');
+    $('capturePreview').classList.add('hidden');
+    $('captureEmpty').classList.remove('hidden');
+    $('fileInput').value = '';
+    $('galleryInput').value = '';
+    updateProcessButton();
+  }
+
+  function resetAll() {
+    discardImage();
+    $('obsInput').value = '';
+    ['fEmpresa', 'fTelefones', 'fEmails', 'fPais', 'fObs'].forEach((id) => { $(id).value = ''; });
+    showStep('stepCapture');
+  }
+
+  async function processCard() {
+    const cfg = config();
+    if (!cfg.apiKey) { toast('Informe a API Key da Anthropic nas configurações.', 'warn'); openSettings(); return; }
+    if (!currentImage) { toast('Tire uma foto do cartão primeiro.', 'warn'); return; }
+    if (!navigator.onLine) { toast('Sem conexão com a internet.', 'error'); return; }
+
+    setLoading(true, 'Lendo o cartão com IA…');
+    try {
+      const r = await extractWithClaude(currentImage, cfg);
+      $('fEmpresa').value = r.empresa;
+      $('fTelefones').value = r.telefones.join('\n');
+      $('fEmails').value = r.emails.join('\n');
+      $('fPais').value = r.pais;
+      $('fObs').value = $('obsInput').value.trim();
+      $('reviewThumb').src = currentImage.dataUrl;
+      showStep('stepReview');
+      if (!r.empresa && !r.telefones.length && !r.emails.length) toast('Poucos dados encontrados — revise ou tire outra foto.', 'warn', 5000);
+    } catch (e) {
+      console.error(e);
+      toast(e.message, 'error', 6000);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveCard() {
+    const cfg = config();
+    if (!cfg.webhook) { toast('Informe a URL do webhook nas configurações.', 'warn'); openSettings(); return; }
+
+    const payload = {
+      token: cfg.token || undefined,
+      dataHora: new Date().toISOString(),
+      empresa: $('fEmpresa').value.trim(),
+      telefones: splitLines($('fTelefones').value),
+      emails: splitLines($('fEmails').value).map((e) => e.toLowerCase()),
+      pais: $('fPais').value.trim(),
+      observacoes: $('fObs').value.trim()
+    };
+
+    if (!payload.empresa && !payload.telefones.length && !payload.emails.length) {
+      toast('Preencha ao menos empresa, telefone ou e-mail.', 'warn');
+      return;
+    }
+
+    $('btnSave').disabled = true;
+    setLoading(true, 'Salvando na planilha…');
+    try {
+      await saveToSheet(payload, cfg);
+      $('doneSummary').textContent = [payload.empresa, payload.pais].filter(Boolean).join(' · ') || 'Registro adicionado.';
+      showStep('stepDone');
+      toast('Contato salvo na planilha!', 'success');
+    } catch (e) {
+      console.error(e);
+      toast(e.message, 'error', 6000);
+    } finally {
+      setLoading(false);
+      $('btnSave').disabled = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Configurações
+  // ---------------------------------------------------------------------------
+  function openSettings() {
+    const c = config();
+    $('cfgApiKey').value = c.apiKey;
+    $('cfgWebhook').value = c.webhook;
+    $('cfgToken').value = c.token;
+    $('cfgModel').value = c.model;
+    $('settingsModal').classList.remove('hidden');
+  }
+  function closeSettings() { $('settingsModal').classList.add('hidden'); }
+
+  function saveSettings() {
+    const apiKey = $('cfgApiKey').value.trim();
+    const webhook = $('cfgWebhook').value.trim();
+    if (webhook && !/^https:\/\/script\.google(usercontent)?\.com\//.test(webhook)) {
+      toast('A URL do webhook deve começar com https://script.google.com/', 'warn', 5000);
+      return;
+    }
+    if (apiKey && !apiKey.startsWith('sk-ant-')) toast('A API Key normalmente começa com "sk-ant-". Confira.', 'warn', 5000);
+    store.set(STORAGE.apiKey, apiKey);
+    store.set(STORAGE.webhook, webhook);
+    store.set(STORAGE.token, $('cfgToken').value.trim());
+    store.set(STORAGE.model, $('cfgModel').value.trim() === DEFAULT_MODEL ? '' : $('cfgModel').value.trim());
+    refreshConfigWarning();
+    closeSettings();
+    toast('Configurações salvas.', 'success');
+  }
+
+  function clearSettings() {
+    if (!confirm('Apagar a API Key e a URL salvas neste aparelho?')) return;
+    Object.values(STORAGE).forEach((k) => store.set(k, ''));
+    openSettings();
+    refreshConfigWarning();
+    toast('Configurações apagadas.', 'info');
+  }
+
+  // ---------------------------------------------------------------------------
+  // PWA: manifest e ícone gerados em linha (arquivo único)
+  // ---------------------------------------------------------------------------
+  function setupPwa() {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0f172a"/><rect x="96" y="150" width="320" height="212" rx="24" fill="#fff"/><circle cx="170" cy="230" r="34" fill="#10b981"/><rect x="226" y="208" width="150" height="18" rx="9" fill="#0f172a"/><rect x="226" y="240" width="110" height="14" rx="7" fill="#94a3b8"/><rect x="130" y="300" width="246" height="14" rx="7" fill="#94a3b8"/></svg>`;
+    const iconUrl = 'data:image/svg+xml,' + encodeURIComponent(svg);
+    $('favicon').href = iconUrl;
+
+    // Ícone PNG para iOS (apple-touch-icon não aceita SVG)
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 180;
+      c.getContext('2d').drawImage(img, 0, 0, 180, 180);
+      $('apple-icon').href = c.toDataURL('image/png');
+    };
+    img.src = iconUrl;
+
+    const base = location.href.split(/[?#]/)[0];
+    const manifest = {
+      name: 'Leitor de Cartões de Visita',
+      short_name: 'Cartões',
+      start_url: base,
+      scope: base.replace(/[^/]*$/, ''),
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#f1f5f9',
+      theme_color: '#0f172a',
+      icons: [{ src: iconUrl, sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }]
+    };
+    $('manifest').href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Eventos
+  // ---------------------------------------------------------------------------
+  function bind() {
+    $('btnCamera').addEventListener('click', () => $('fileInput').click());
+    $('btnRetake').addEventListener('click', () => $('fileInput').click());
+    $('btnGallery').addEventListener('click', () => $('galleryInput').click());
+    $('fileInput').addEventListener('change', (e) => handleFile(e.target.files[0]));
+    $('galleryInput').addEventListener('change', (e) => handleFile(e.target.files[0]));
+    $('btnDiscard').addEventListener('click', discardImage);
+    $('btnProcess').addEventListener('click', processCard);
+    $('btnSave').addEventListener('click', saveCard);
+    $('btnBack').addEventListener('click', () => showStep('stepCapture'));
+    $('btnNext').addEventListener('click', resetAll);
+
+    $('btnSettings').addEventListener('click', openSettings);
+    $('btnOpenSettingsInline').addEventListener('click', openSettings);
+    $('btnCloseSettings').addEventListener('click', closeSettings);
+    $('btnSaveSettings').addEventListener('click', saveSettings);
+    $('btnClearSettings').addEventListener('click', clearSettings);
+    $('btnToggleKey').addEventListener('click', () => {
+      const i = $('cfgApiKey');
+      i.type = i.type === 'password' ? 'text' : 'password';
+    });
+    $('settingsModal').addEventListener('click', (e) => { if (e.target.id === 'settingsModal') closeSettings(); });
+
+    window.addEventListener('offline', () => toast('Você está offline.', 'warn'));
+    window.addEventListener('online', () => toast('Conexão restabelecida.', 'success', 2000));
+  }
+
+  setupPwa();
+  bind();
+  refreshConfigWarning();
+  if (!config().apiKey || !config().webhook) setTimeout(openSettings, 300);
+})();
+</script>
+</body>
+</html>
