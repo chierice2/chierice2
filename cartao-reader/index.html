@@ -215,6 +215,7 @@
   // ---------------------------------------------------------------------------
   const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
   const DEFAULT_MODEL = 'claude-opus-5';
+  const DEFAULT_WEBHOOK = 'https://script.google.com/macros/s/AKfycbwmEebcTfQDu9aZkFl0EqR9Xok1IgXAJ1XvRCMjdpo6g1z299NQXn35K712HQV4tqBjIw/exec';
   const MAX_IMAGE_SIDE = 1568;      // lado máximo recomendado para visão
   const JPEG_QUALITY = 0.85;
   const API_TIMEOUT_MS = 120000;
@@ -262,7 +263,7 @@ Regras:
 
   const config = () => ({
     apiKey: store.get(STORAGE.apiKey).trim(),
-    webhook: store.get(STORAGE.webhook).trim(),
+    webhook: store.get(STORAGE.webhook).trim() || DEFAULT_WEBHOOK,
     token: store.get(STORAGE.token).trim(),
     model: store.get(STORAGE.model).trim() || DEFAULT_MODEL
   });
@@ -569,7 +570,7 @@ Regras:
     }
     if (apiKey && !apiKey.startsWith('sk-ant-')) toast('A API Key normalmente começa com "sk-ant-". Confira.', 'warn', 5000);
     store.set(STORAGE.apiKey, apiKey);
-    store.set(STORAGE.webhook, webhook);
+    store.set(STORAGE.webhook, webhook === DEFAULT_WEBHOOK ? '' : webhook);
     store.set(STORAGE.token, $('cfgToken').value.trim());
     store.set(STORAGE.model, $('cfgModel').value.trim() === DEFAULT_MODEL ? '' : $('cfgModel').value.trim());
     refreshConfigWarning();
