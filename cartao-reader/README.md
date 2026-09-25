@@ -15,6 +15,8 @@ com o Claude (visão), mostra os dados para revisão e salva numa planilha do Go
 1. Crie uma planilha nova em <https://sheets.new>.
 2. Menu **Extensões → Apps Script**.
 3. Apague o conteúdo de `Código.gs` e cole todo o `Code.gs` deste repositório. Salve (💾).
+   Deixe **um único arquivo** `.gs` no projeto (arquivos extras com o mesmo código causam conflito).
+   Se o script não foi criado pelo menu da planilha, preencha `SPREADSHEET_ID` no topo do código.
 4. *(Opcional, recomendado)* Preencha `SECRET_TOKEN` com uma senha qualquer, ex.: `const SECRET_TOKEN = 'minha-senha-123';`
 5. No seletor de funções escolha **`testeManual`** → **Executar** → autorize o acesso à sua conta.
    Uma aba **"Cartões"** será criada com o cabeçalho e uma linha de teste (pode apagá-la).

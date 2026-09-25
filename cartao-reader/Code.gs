@@ -12,6 +12,10 @@ const SHEET_NAME = 'Cartões';
 // Deixe vazio ('') para não exigir token.
 const SECRET_TOKEN = '';
 
+// Só é necessário se o script NÃO foi criado pelo menu Extensões → Apps Script da planilha.
+// Cole aqui o ID da planilha (o trecho entre /d/ e /edit na URL dela).
+const SPREADSHEET_ID = '';
+
 const HEADERS = ['Data/Hora', 'Empresa', 'Telefones', 'Emails', 'País', 'Observações'];
 
 function doPost(e) {
@@ -71,7 +75,8 @@ function doGet() {
 }
 
 function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error('Script não está vinculado a uma planilha. Preencha SPREADSHEET_ID no topo do código.');
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
   if (sheet.getLastRow() === 0) {
